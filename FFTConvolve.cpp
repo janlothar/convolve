@@ -92,11 +92,11 @@ Wave readWAVE(const char* filePath){
 
 void writeWAVE(string outputFile, Wave original, float data[], int dataLength) {
 
-    char* riff = new char[4]{(char)original.RIFF[0], (char)original.RIFF[1], (char)original.RIFF[2], (char)original.RIFF[3]};       //"RIFF"
+    char* riff = new char[4]{'R', 'I', 'F', 'F'};       //"RIFF"
     int Subchunk2Size = dataLength * 2; //Size of sound sample data in bytes
     int chunkSize = Subchunk2Size + 36; //Size of remaining file in bytes (36 + Subchunk2Size)
-    char* format = new char[4]{(char)original.WAVE[0], (char)original.WAVE[1], (char)original.WAVE[2], (char)original.WAVE[3]};     //"WAVE"
-    char* subChunk1ID = new char[4]{(char)original.fmt[0], (char)original.fmt[1], (char)original.fmt[2], (char)original.fmt[3]};    //"fmt" space after t is needed
+    char* format = new char[4]{'W', 'A', 'V', 'E'};     //"WAVE"
+    char* subChunk1ID = new char[4]{'f', 'm', 't', ' '};    //"fmt" space after t is needed
     int subChunk1Size = 16; // 16
     short audioFmt = 1; //1 = PCM
     short numChannels = 1;  //1 = mono 2 = stereo
