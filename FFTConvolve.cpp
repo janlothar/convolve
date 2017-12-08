@@ -92,33 +92,26 @@ Wave readWAVE(const char* filePath){
 
 void writeWAVE(string outputFile, Wave original, float data[], int dataLength) {
 
-    char* riff = new char[4]{'R', 'I', 'F', 'F'};       //"RIFF"
     int Subchunk2Size = dataLength * 2; //Size of sound sample data in bytes
     int chunkSize = Subchunk2Size + 36; //Size of remaining file in bytes (36 + Subchunk2Size)
-    char* format = new char[4]{'W', 'A', 'V', 'E'};     //"WAVE"
-    char* subChunk1ID = new char[4]{'f', 'm', 't', ' '};    //"fmt" space after t is needed
-    int subChunk1Size = 16; // 16
-    short audioFmt = 1; //1 = PCM
-    short numChannels = 1;  //1 = mono 2 = stereo
-    int byteRate = (int)original.SamplesPerSec * numChannels * original.bitsPerSample/8;    //SamepleRate * NumChannels * BitsPerSample/8
-    int blockAlign = numChannels * (original.bitsPerSample / 8);    //NumChannels * BitsPerSample/8
-    char* subChunk2ID = new char[4]{(char)original.Subchunk2ID[0], (char)original.Subchunk2ID[1], (char)original.Subchunk2ID[2], (char)original.Subchunk2ID[3]};    //"data"
+    int byteRate = (int)original.SamplesPerSec * 1 * original.bitsPerSample/8;    //SamepleRate * NumChannels * BitsPerSample/8
+    int blockAlign = 1 * (original.bitsPerSample / 8);    //NumChannels * BitsPerSample/8
 
     //write
     ofstream output;
     output.open(outputFile, ios::binary | ios::out);
-    output.write(riff, 4);                  // RIFF
+    output.write(new char[4]{'R', 'I', 'F', 'F'}, 4);   // RIFF
     output.write((char*)&chunkSize, 4);     //ChunkSize
-    output.write(format, 4);                //Format
-    output.write(subChunk1ID, 4);           //subChunk1ID
-    output.write((char*)&subChunk1Size, 4); //subChunk1Size
-    output.write((char*)&audioFmt, 2);      //AudioFormat
-    output.write((char*)&numChannels, 2);   //NumChannels
+    output.write(new char[4]{'W', 'A', 'V', 'E'}, 4);   //Format
+    output.write(new char[4]{'f', 'm', 't', ' '}, 4);   //subChunk1ID
+    output.write((char*)new int(16), 4); //subChunk1Size
+    output.write((char*)new int(1), 2);      //AudioFormat
+    output.write((char*)new int(1), 2);   //NumChannels
     output.write((char*)&original.SamplesPerSec, 4);    //SampleRate
     output.write((char*)&byteRate, 4);      //ByteRate
     output.write((char*)&blockAlign, 2);    //BlockAlign
     output.write((char*)&original.bitsPerSample, 2);    //BitsPerSample
-    output.write(subChunk2ID, 4);           //Subchunk2ID
+    output.write(new char[4]{'d', 'a', 't', 'a'}, 4);           //Subchunk2ID
     output.write((char*)&Subchunk2Size, 4); //Subchunk2Size
     //Data
     int16_t dataToWrite;
