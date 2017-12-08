@@ -34,7 +34,8 @@ typedef struct  WAV
     uint32_t        Subchunk2Size;  // Sampled data length
 
     //actual data
-    float*         dataArray;
+    float*          dataArray;
+    int             dataLength;
 } Wave;
 
 // Function prototypes
@@ -62,28 +63,70 @@ Wave readWAVE(const char* filePath){
     input.read((char*)&waveFile.extraData, waveFile.Subchunk1Size-16);
     input.read((char*)&waveFile.Subchunk2ID, 4);
     input.read((char*)&waveFile.Subchunk2Size, 4);
-
     waveFile.dataArray = new float[waveFile.Subchunk2Size / (waveFile.bitsPerSample / 8)];
-
     int16_t sample;
-
     for(int i = 0; i < waveFile.Subchunk2Size / (waveFile.bitsPerSample / 8); i++){
-
         input.read((char*)&sample, 2);
-
         float converted = (float) sample / (float)INT16_MAX;
-
         if(converted < -1.0){
             converted = -1.0;
         }
-
         waveFile.dataArray[i] = converted;
+    }
+    waveFile.dataLength = (waveFile.Subchunk2Size / (waveFile.bitsPerSample/8));
 
+    //strip one channel if stereo
+    if (waveFile.NumOfChan == 2){
+        float* strip = new float[waveFile.dataLength/2];
+        for (int i = 0; i < waveFile.dataLength/2; i++) {
+            strip[i] = waveFile.dataArray[i*2];
+        }
+        waveFile.dataArray = strip;
+        waveFile.dataLength = waveFile.dataLength/2;
     }
 
     input.close();
 
     return waveFile;
+}
+
+void writeWAVE(string outputFile, Wave original, float data[], int dataLength) {
+
+    char* riff = new char[4]{(char)original.RIFF[0], (char)original.RIFF[1], (char)original.RIFF[2], (char)original.RIFF[3]};       //"RIFF"
+    int Subchunk2Size = dataLength * 2; //Size of sound sample data in bytes
+    int chunkSize = Subchunk2Size + 36; //Size of remaining file in bytes (36 + Subchunk2Size)
+    char* format = new char[4]{(char)original.WAVE[0], (char)original.WAVE[1], (char)original.WAVE[2], (char)original.WAVE[3]};     //"WAVE"
+    char* subChunk1ID = new char[4]{(char)original.fmt[0], (char)original.fmt[1], (char)original.fmt[2], (char)original.fmt[3]};    //"fmt" space after t is needed
+    int subChunk1Size = 16; // 16
+    short audioFmt = 1; //1 = PCM
+    short numChannels = 1;  //1 = mono 2 = stereo
+    int byteRate = (int)original.SamplesPerSec * numChannels * original.bitsPerSample/8;    //SamepleRate * NumChannels * BitsPerSample/8
+    int blockAlign = numChannels * (original.bitsPerSample / 8);    //NumChannels * BitsPerSample/8
+    char* subChunk2ID = new char[4]{(char)original.Subchunk2ID[0], (char)original.Subchunk2ID[1], (char)original.Subchunk2ID[2], (char)original.Subchunk2ID[3]};    //"data"
+
+    //write
+    ofstream output;
+    output.open(outputFile, ios::binary | ios::out);
+    output.write(riff, 4);                  // RIFF
+    output.write((char*)&chunkSize, 4);     //ChunkSize
+    output.write(format, 4);                //Format
+    output.write(subChunk1ID, 4);           //subChunk1ID
+    output.write((char*)&subChunk1Size, 4); //subChunk1Size
+    output.write((char*)&audioFmt, 2);      //AudioFormat
+    output.write((char*)&numChannels, 2);   //NumChannels
+    output.write((char*)&original.SamplesPerSec, 4);    //SampleRate
+    output.write((char*)&byteRate, 4);      //ByteRate
+    output.write((char*)&blockAlign, 2);    //BlockAlign
+    output.write((char*)&original.bitsPerSample, 2);    //BitsPerSample
+    output.write(subChunk2ID, 4);           //Subchunk2ID
+    output.write((char*)&Subchunk2Size, 4); //Subchunk2Size
+    //Data
+    int16_t dataToWrite;
+    for(int i = 0; i < dataLength; i++){
+        dataToWrite = (int16_t) (data[i] * INT16_MAX);
+        output.write((char*)&dataToWrite, 2);
+    }
+    output.close();
 }
 
 //Code for wav file printout format gotten from user kory @ https://stackoverflow.com/questions/13660777/c-reading-the-data-part-of-a-wav-file
@@ -105,7 +148,7 @@ void printWAVEdetails(Wave wave){
 
     cout << "Block align                :" << wave.blockAlign << endl;
     cout << "Data string                :" << wave.Subchunk2ID[0] << wave.Subchunk2ID[1] << wave.Subchunk2ID[2] << wave.Subchunk2ID[3] << endl;
-    cout << "--------------------------" << endl;
+    cout << "----------------------------------" << endl;
 }
 
 // find the file size
@@ -120,7 +163,7 @@ int getFileSize(FILE* inFile)
     return fileSize;
 }
 
-//convolve skeleton function gotten from professor Manzara convolution demo program
+//convolve function gotten from professor Manzara convolution demo program
 void convolve(float x[], int N, float h[], int M, float y[], int P)
 {
   int n, m;
@@ -165,9 +208,26 @@ int main(int argc, char* argv[])
         cout << "output name: " << inputfile << endl << endl;
     }
     Wave inputWave = readWAVE(inputfile);
+    cout << "inputfile details\n---" << endl;
     printWAVEdetails(inputWave);
     Wave IRWave = readWAVE(IRfile);
+    cout << "IRfile details\n---" << endl;
     printWAVEdetails(IRWave);
+
+    int convolvedDataLength = inputWave.dataLength + IRWave.dataLength - 1;
+    float* convolvedData = new float[convolvedDataLength];
+
+    cout << "Convolving..." << endl;
+    convolve(inputWave.dataArray, inputWave.dataLength, IRWave.dataArray, IRWave.dataLength, convolvedData, convolvedDataLength);
+    writeWAVE(outputfile, inputWave, convolvedData, convolvedDataLength);
+    // writeWAVE(outputfile, inputWave, inputWave.dataArray, inputWave.dataLength); //test writing without convolving
+    cout << "Done!" << endl;
+
+    Wave outputWave = readWAVE(outputfile);
+    cout << "outputfile details\n---" << endl;
+    printWAVEdetails(outputWave);
+
+    cout << "Convolution reverb has been completed on " << inputfile << " with impulse response " << IRfile << " and file " << outputfile << " has been created" << endl;
 
     return 0;
 }
