@@ -3,15 +3,16 @@
 #include <fstream>
 #include <cstdint>
 
+using namespace std;
+
 using std::cin;
 using std::cout;
 using std::endl;
 using std::fstream;
 using std::string;
 
-//Code used to read wav file gotten from user kory @ https://stackoverflow.com/questions/13660777/c-reading-the-data-part-of-a-wav-file
-
-typedef struct  WAV_HEADER
+//Code for wav file struct gotten from user kory @ https://stackoverflow.com/questions/13660777/c-reading-the-data-part-of-a-wav-file
+typedef struct  WAV
 {
     /* RIFF Chunk Descriptor */
     uint8_t         RIFF[4];        // RIFF Header Magic header
@@ -26,80 +27,85 @@ typedef struct  WAV_HEADER
     uint32_t        bytesPerSec;    // bytes per second
     uint16_t        blockAlign;     // 2=16-bit mono, 4=16-bit stereo
     uint16_t        bitsPerSample;  // Number of bits per sample
+
+    uint8_t*         extraData;
     /* "data" sub-chunk */
     uint8_t         Subchunk2ID[4]; // "data"  string
     uint32_t        Subchunk2Size;  // Sampled data length
-} wav_hdr;
+
+    //actual data
+    float*         dataArray;
+} Wave;
 
 // Function prototypes
 int getFileSize(FILE* inFile);
 
-int main(int argc, char* argv[])
-{
-    wav_hdr wavHeader;
-    int headerSize = sizeof(wav_hdr), filelength = 0;
+Wave readWAVE(const char* filePath){
 
-    const char* filePath;
-    string input;
-    if (argc <= 1)
-    {
-        cout << "Input wave file name: ";
-        cin >> input;
-        cin.get();
-        filePath = input.c_str();
-    }
-    else
-    {
-        filePath = argv[1];
-        cout << "Input wave file name: " << filePath << endl;
-    }
+    Wave waveFile;
+    ifstream input;
 
-    FILE* wavFile = fopen(filePath, "r");
-    if (wavFile == nullptr)
-    {
-        fprintf(stderr, "Unable to open wave file: %s\n", filePath);
-        return 1;
-    }
+    input.open(filePath, ios::binary);
 
-    //Read the header
-    size_t bytesRead = fread(&wavHeader, 1, headerSize, wavFile);
-    cout << "Header Read " << bytesRead << " bytes." << endl;
-    if (bytesRead > 0)
-    {
-        //Read the data
-        uint16_t bytesPerSample = wavHeader.bitsPerSample / 8;      //Number     of bytes per sample
-        uint64_t numSamples = wavHeader.ChunkSize / bytesPerSample; //How many samples are in the wav file?
-        static const uint16_t BUFFER_SIZE = 4096;
-        int8_t* buffer = new int8_t[BUFFER_SIZE];
-        while ((bytesRead = fread(buffer, sizeof buffer[0], BUFFER_SIZE / (sizeof buffer[0]), wavFile)) > 0)
-        {
-            /** DO SOMETHING WITH THE WAVE DATA HERE **/
-            // cout << "Read " << bytesRead << " bytes." << endl;
+    input.read((char*)&waveFile.RIFF, 4);
+    input.read((char*)&waveFile.ChunkSize, 4);
+    input.read((char*)&waveFile.WAVE, 4);
+    input.read((char*)&waveFile.fmt, 4);
+    input.read((char*)&waveFile.Subchunk1Size, 4);
+    input.read((char*)&waveFile.AudioFormat, 2);
+    input.read((char*)&waveFile.NumOfChan, 2);
+    input.read((char*)&waveFile.SamplesPerSec, 4);
+    input.read((char*)&waveFile.bytesPerSec, 4);
+    input.read((char*)&waveFile.blockAlign, 2);
+    input.read((char*)&waveFile.bitsPerSample, 2);
+    waveFile.extraData = new uint8_t[waveFile.Subchunk1Size - 16];
+    input.read((char*)&waveFile.extraData, waveFile.Subchunk1Size-16);
+    input.read((char*)&waveFile.Subchunk2ID, 4);
+    input.read((char*)&waveFile.Subchunk2Size, 4);
+
+    waveFile.dataArray = new float[waveFile.Subchunk2Size / (waveFile.bitsPerSample / 8)];
+
+    int16_t sample;
+
+    for(int i = 0; i < waveFile.Subchunk2Size / (waveFile.bitsPerSample / 8); i++){
+
+        input.read((char*)&sample, 2);
+
+        float converted = (float) sample / (float)INT16_MAX;
+
+        if(converted < -1.0){
+            converted = -1.0;
         }
-        delete [] buffer;
-        buffer = nullptr;
-        filelength = getFileSize(wavFile);
 
-        cout << "File is                    :" << filelength << " bytes." << endl;
-        cout << "RIFF header                :" << wavHeader.RIFF[0] << wavHeader.RIFF[1] << wavHeader.RIFF[2] << wavHeader.RIFF[3] << endl;
-        cout << "WAVE header                :" << wavHeader.WAVE[0] << wavHeader.WAVE[1] << wavHeader.WAVE[2] << wavHeader.WAVE[3] << endl;
-        cout << "FMT                        :" << wavHeader.fmt[0] << wavHeader.fmt[1] << wavHeader.fmt[2] << wavHeader.fmt[3] << endl;
-        cout << "Data size                  :" << wavHeader.ChunkSize << endl;
+        waveFile.dataArray[i] = converted;
 
-        // Display the sampling Rate from the header
-        cout << "Sampling Rate              :" << wavHeader.SamplesPerSec << endl;
-        cout << "Number of bits used        :" << wavHeader.bitsPerSample << endl;
-        cout << "Number of channels         :" << wavHeader.NumOfChan << endl;
-        cout << "Number of bytes per second :" << wavHeader.bytesPerSec << endl;
-        cout << "Data length                :" << wavHeader.Subchunk2Size << endl;
-        cout << "Audio Format               :" << wavHeader.AudioFormat << endl;
-        // Audio format 1=PCM,6=mulaw,7=alaw, 257=IBM Mu-Law, 258=IBM A-Law, 259=ADPCM
-
-        cout << "Block align                :" << wavHeader.blockAlign << endl;
-        cout << "Data string                :" << wavHeader.Subchunk2ID[0] << wavHeader.Subchunk2ID[1] << wavHeader.Subchunk2ID[2] << wavHeader.Subchunk2ID[3] << endl;
     }
-    fclose(wavFile);
-    return 0;
+
+    input.close();
+
+    return waveFile;
+}
+
+//Code for wav file printout format gotten from user kory @ https://stackoverflow.com/questions/13660777/c-reading-the-data-part-of-a-wav-file
+void printWAVEdetails(Wave wave){
+
+    cout << "RIFF header                :" << wave.RIFF[0] << wave.RIFF[1] << wave.RIFF[2] << wave.RIFF[3] << endl;
+    cout << "WAVE header                :" << wave.WAVE[0] << wave.WAVE[1] << wave.WAVE[2] << wave.WAVE[3] << endl;
+    cout << "FMT                        :" << wave.fmt[0] << wave.fmt[1] << wave.fmt[2] << wave.fmt[3] << endl;
+    cout << "Data size                  :" << wave.ChunkSize << endl;
+
+    // Display the sampling Rate from the header
+    cout << "Sampling Rate              :" << wave.SamplesPerSec << endl;
+    cout << "Number of bits used        :" << wave.bitsPerSample << endl;
+    cout << "Number of channels         :" << wave.NumOfChan << endl;
+    cout << "Number of bytes per second :" << wave.bytesPerSec << endl;
+    cout << "Data length                :" << wave.Subchunk2Size << endl;
+    cout << "Audio Format               :" << wave.AudioFormat << endl;
+    // Audio format 1=PCM,6=mulaw,7=alaw, 257=IBM Mu-Law, 258=IBM A-Law, 259=ADPCM
+
+    cout << "Block align                :" << wave.blockAlign << endl;
+    cout << "Data string                :" << wave.Subchunk2ID[0] << wave.Subchunk2ID[1] << wave.Subchunk2ID[2] << wave.Subchunk2ID[3] << endl;
+    cout << "--------------------------" << endl;
 }
 
 // find the file size
@@ -114,7 +120,7 @@ int getFileSize(FILE* inFile)
     return fileSize;
 }
 
-//convolve function gotten from professor Manzara convolution demo program
+//convolve skeleton function gotten from professor Manzara convolution demo program
 void convolve(float x[], int N, float h[], int M, float y[], int P)
 {
   int n, m;
@@ -138,4 +144,30 @@ void convolve(float x[], int N, float h[], int M, float y[], int P)
     for (m = 0; m < M; m++)
       y[n+m] += x[n] * h[m];
   }
+}
+
+int main(int argc, char* argv[])
+{
+    const char* inputfile;
+    const char* IRfile;
+    const char* outputfile;
+
+    if (argc < 4) {
+        cout << "Usage: " << argv[0] << " inputfile IRfile outputfile\n";
+        exit(0);
+    }
+    else {
+        inputfile = argv[1];
+        cout << "input name: " << inputfile << endl;
+        IRfile = argv[2];
+        cout << "IRfile name: " << inputfile << endl;
+        outputfile = argv[3];
+        cout << "output name: " << inputfile << endl << endl;
+    }
+    Wave inputWave = readWAVE(inputfile);
+    printWAVEdetails(inputWave);
+    Wave IRWave = readWAVE(IRfile);
+    printWAVEdetails(IRWave);
+
+    return 0;
 }
