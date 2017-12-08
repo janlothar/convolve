@@ -203,9 +203,9 @@ int main(int argc, char* argv[])
         inputfile = argv[1];
         cout << "input name: " << inputfile << endl;
         IRfile = argv[2];
-        cout << "IRfile name: " << inputfile << endl;
+        cout << "IRfile name: " << IRfile << endl;
         outputfile = argv[3];
-        cout << "output name: " << inputfile << endl << endl;
+        cout << "output name: " << outputfile << endl << endl;
     }
     Wave inputWave = readWAVE(inputfile);
     cout << "inputfile details\n---" << endl;
